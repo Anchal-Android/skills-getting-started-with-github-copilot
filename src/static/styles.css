@@ -190,8 +190,8 @@ footer {
 }
 
 .participants-list {
-  list-style: disc;
-  padding-left: 1.25rem;
+  list-style: none;
+  padding-left: 0;
   margin: 0;
   max-height: 9rem;
   overflow: auto;
@@ -202,6 +202,26 @@ footer {
   align-items: center;
   gap: 0.5rem;
   padding: 0.06rem 0.2rem;
+}
+
+.participant-email {
+  flex: 1;
+  word-break: break-word;
+}
+
+.remove-participant {
+  margin-left: 0.25rem;
+  background: transparent;
+  border: none;
+  color: #c62828;
+  cursor: pointer;
+  font-size: 0.95rem;
+  padding: 0.2rem;
+  border-radius: 3px;
+}
+
+.remove-participant:hover {
+  background: rgba(198,40,40,0.08);
 }
 
 .participant-badge {

@@ -79,8 +79,9 @@
     <script src="app.js"></script>
     <script>
       // Enhance activity cards and handle signups
-      document.addEventListener('DOMContentLoaded', () => {
-        const activitiesList = document.getElementById('activities-list');
+      if (!window.__serverApp) {
+        document.addEventListener('DOMContentLoaded', () => {
+          const activitiesList = document.getElementById('activities-list');
         const template = document.getElementById('activity-card-template');
         const form = document.getElementById('signup-form');
         const message = document.getElementById('message');
@@ -181,6 +182,7 @@
           form.reset();
         });
       });
+    }
     </script>
   </body>
 </html>
