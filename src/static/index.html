@@ -5,6 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mergington High School Activities</title>
     <link rel="stylesheet" href="styles.css" />
+    <style>
+      /* Activity card layout */
+      #activities-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+      .activity-card { background:#fff; border:1px solid #e9e9e9; padding:1rem; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.04); }
+      .activity-card .activity-title { margin:0 0 .25rem 0; font-size:1.05rem; }
+      .activity-meta { font-size:.9rem; color:#666; margin-bottom:.5rem; }
+      /* Participants */
+      .participants { margin-top:.75rem; }
+      .participants h4 { margin:0 0 .4rem 0; font-size:.95rem; }
+      .participants-list { list-style: disc; padding-left:1.25rem; margin:0; max-height:9rem; overflow:auto; }
+      .participants-list li { display:flex; align-items:center; gap:.5rem; padding:.08rem .2rem; }
+      .participant-badge { width:28px; height:28px; border-radius:50%; background:#1976d2; color:#fff; display:inline-flex; align-items:center; justify-content:center; font-weight:600; font-size:.8rem; }
+      .empty { color:#888; font-style:italic; }
+      /* Message */
+      #message { transition: opacity .2s ease; padding:.5rem .75rem; border-radius:6px; margin-top:.5rem; display:inline-block; }
+      .hidden { opacity:0; height:0; overflow:hidden; pointer-events:none; }
+      .message.success { background:#e6f4ea; color:#1b5e20; border:1px solid #c8e6c9; }
+      .message.error { background:#fff0f0; color:#7f1d1d; border:1px solid #f3c6c6; }
+    </style>
   </head>
   <body>
     <header>
@@ -18,6 +37,19 @@
         <div id="activities-list">
           <!-- Activities will be loaded here -->
           <p>Loading activities...</p>
+          <!-- Template for activity cards with participants list -->
+          <template id="activity-card-template">
+            <article class="activity-card" role="article" data-activity-id="">
+              <h4 class="activity-title">Activity title</h4>
+              <div class="activity-meta"><span class="activity-description">Description</span></div>
+              <div class="participants">
+                <h4>Participants</h4>
+                <ul class="participants-list">
+                  <li class="empty">No participants yet</li>
+                </ul>
+              </div>
+            </article>
+          </template>
         </div>
       </section>
 
@@ -44,7 +76,113 @@
     <footer>
       <p>&copy; 2023 Mergington High School</p>
     </footer>
-
     <script src="app.js"></script>
+    <script>
+      // Enhance activity cards and handle signups
+      if (!window.__serverApp) {
+        document.addEventListener('DOMContentLoaded', () => {
+          const activitiesList = document.getElementById('activities-list');
+        const template = document.getElementById('activity-card-template');
+        const form = document.getElementById('signup-form');
+        const message = document.getElementById('message');
+        const participantsById = new Map();
+
+        const getInitials = (email) => {
+          const name = email.split('@')[0].replace(/[._-]/g,' ');
+          const parts = name.trim().split(/\s+/);
+          return ((parts[0] ? parts[0][0] : '') + (parts[1] ? parts[1][0] : '')).slice(0,2).toUpperCase() || email.slice(0,2).toUpperCase();
+        };
+
+        const ensureParticipantsSection = (card) => {
+          if (!card.querySelector('.participants')) {
+            const frag = template.content.cloneNode(true);
+            const newCard = frag.querySelector('.activity-card');
+            // copy title/desc if present
+            const titleNode = card.querySelector('h3,h4,.title') || card.querySelector('h2');
+            const descNode = card.querySelector('.description') || card.querySelector('p');
+            if (titleNode) newCard.querySelector('.activity-title').textContent = titleNode.textContent.trim();
+            if (descNode) newCard.querySelector('.activity-description').textContent = descNode.textContent.trim();
+            const id = card.dataset.activityId || card.getAttribute('data-id') || '';
+            if (id) newCard.dataset.activityId = id;
+            card.replaceWith(newCard);
+            return newCard;
+          }
+          return card;
+        };
+
+        // Watch for activities inserted by external script and enhance them
+        const mo = new MutationObserver(muts => {
+          muts.forEach(m => Array.from(m.addedNodes).forEach(node => {
+            if (!(node instanceof HTMLElement)) return;
+            if (node.matches('.activity-card') || node.querySelector('.activity-card')) {
+              const card = node.matches('.activity-card') ? node : node.querySelector('.activity-card');
+              ensureParticipantsSection(card);
+            }
+          }));
+        });
+        mo.observe(activitiesList, { childList:true, subtree:true });
+
+        // Enhance any existing children
+        activitiesList.querySelectorAll('.activity-card, [data-activity-id]').forEach(el => {
+          const card = el.matches('.activity-card') ? el : el.closest('[data-activity-id]') || el;
+          ensureParticipantsSection(card);
+        });
+
+        const updateParticipantsUI = (activityId) => {
+          const card = activitiesList.querySelector(`[data-activity-id="${activityId}"]`);
+          if (!card) return;
+          const ul = card.querySelector('.participants-list');
+          ul.innerHTML = '';
+          const list = participantsById.get(activityId) || [];
+          if (!list.length) {
+            const li = document.createElement('li'); li.className = 'empty'; li.textContent = 'No participants yet';
+            ul.appendChild(li); return;
+          }
+          list.forEach(email => {
+            const li = document.createElement('li');
+            const badge = document.createElement('span'); badge.className = 'participant-badge'; badge.textContent = getInitials(email);
+            const span = document.createElement('span'); span.textContent = email;
+            li.appendChild(badge); li.appendChild(span); ul.appendChild(li);
+          });
+        };
+
+        const showMessage = (text, isError=false) => {
+          message.className = isError ? 'message error' : 'message success';
+          message.textContent = text;
+          message.classList.remove('hidden');
+          setTimeout(() => message.classList.add('hidden'), 3000);
+        };
+
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const email = document.getElementById('email').value.trim();
+          const select = document.getElementById('activity');
+          const activityId = select.value;
+          const activityText = select.options[select.selectedIndex]?.text || activityId;
+          if (!email || !activityId) { showMessage('Please enter an email and choose an activity.', true); return; }
+          const existing = participantsById.get(activityId) || [];
+          if (existing.includes(email)) { showMessage('You are already signed up for this activity.', true); return; }
+          existing.push(email); participantsById.set(activityId, existing);
+          // find or create card
+          let card = activitiesList.querySelector(`[data-activity-id="${activityId}"]`);
+          if (!card) {
+            // try to find by title text
+            card = Array.from(activitiesList.children).find(c => (c.textContent || '').includes(activityText));
+          }
+          if (!card) {
+            const frag = template.content.cloneNode(true);
+            const newCard = frag.querySelector('.activity-card');
+            newCard.dataset.activityId = activityId;
+            newCard.querySelector('.activity-title').textContent = activityText;
+            activitiesList.appendChild(newCard);
+            card = newCard;
+          }
+          updateParticipantsUI(activityId);
+          showMessage('Signed up successfully!');
+          form.reset();
+        });
+      });
+    }
+    </script>
   </body>
 </html>
