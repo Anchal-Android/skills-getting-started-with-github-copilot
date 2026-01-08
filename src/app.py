@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
 from pathlib import Path
+import re
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
@@ -78,6 +79,33 @@ activities = {
 }
 
 
+def slugify(name: str) -> str:
+    """Create a simple slug from a name (lowercase, dashes)."""
+    s = name.lower().strip()
+    s = re.sub(r'[^\w\s-]', '', s)
+    s = re.sub(r'[\s_]+', '-', s)
+    s = re.sub(r'-{2,}', '-', s)
+    return s.strip('-')
+
+
+def resolve_activity_key(identifier: str) -> str:
+    """Resolve an identifier that may be a full activity name, case-insensitive name, or slug."""
+    # Exact match
+    if identifier in activities:
+        return identifier
+    # Case-insensitive match
+    for name in activities.keys():
+        if name.lower() == identifier.lower():
+            return name
+    # Slug match
+    slug = slugify(identifier)
+    for name in activities.keys():
+        if slugify(name) == slug:
+            return name
+    # Not found
+    raise HTTPException(status_code=404, detail="Activity not found")
+
+
 @app.get("/")
 def root():
     return RedirectResponse(url="/static/index.html")
@@ -85,18 +113,16 @@ def root():
 
 @app.get("/activities")
 def get_activities():
-    return activities
+    # Include a stable slug/id for each activity so clients can use it reliably
+    return { name: { **details, "id": slugify(name) } for name, details in activities.items() }
 
 
 @app.post("/activities/{activity_name}/signup")
 def signup_for_activity(activity_name: str, email: str):
     """Sign up a student for an activity"""
-    # Validate activity exists
-    if activity_name not in activities:
-        raise HTTPException(status_code=404, detail="Activity not found")
-
-    # Get the specific activity
-    activity = activities[activity_name]
+    # Resolve activity identifier (accept full name, case-insensitive, or slug)
+    resolved_name = resolve_activity_key(activity_name)
+    activity = activities[resolved_name]
 
     # Check if already signed up
     if email in activity["participants"]:
@@ -104,4 +130,4 @@ def signup_for_activity(activity_name: str, email: str):
     
     # Add student
     activity["participants"].append(email)
-    return {"message": f"Signed up {email} for {activity_name}"}
+    return {"message": f"Signed up {email} for {resolved_name}"}
